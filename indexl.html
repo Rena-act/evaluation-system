@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>演劇部評価システム</title>
+    <style>
+        body {
+            font-family: 'Hiragino Mincho ProN', serif;
+            margin: 20px;
+            background-color: #d4f1f9;
+        }
+        label, textarea, select, button {
+            display: block;
+            margin-bottom: 10px;
+        }
+        #evaluations, #summary {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        .form-section {
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #005f99;
+        }
+        .delete-button {
+            background-color: #003366; /* 濃い青に変更 */
+            margin-left: 10px;
+        }
+        .delete-button:hover {
+            background-color: #002244; /* 濃い青の暗い色に変更 */
+        }
+        /* 右上に配置 */
+        .form-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <h1>演劇部評価システム</h1>
+
+    <!-- 右上に配置された評価者と部員追加フォーム -->
+    <div class="form-container">
+        <div class="form-section">
+            <label for="add-evaluator">評価者を追加:</label>
+            <input type="text" id="add-evaluator" placeholder="評価者名">
+            <button onclick="addEvaluator()">評価者を追加</button>
+        </div>
+
+        <div class="form-section">
+            <label for="add-member">部員を追加:</label>
+            <input type="text" id="add-member" placeholder="部員名">
+            <button onclick="addMember()">部員を追加</button>
+        </div>
+    </div>
+
+    <form id="evaluation-form">
+        <label for="evaluator">評価者:</label>
+        <select id="evaluator" required>
+            <option value="" disabled selected>評価者を選択</option>
+        </select>
+
+        <label for="member">部員名:</label>
+        <select id="member" required>
+            <option value="" disabled selected>部員を選択</option>
+        </select>
+
+        <label for="score">評価 (A~E):</label>
+        <select id="score" name="score" required>
+            <option value="10">A</option>
+            <option value="5">B</option>
+            <option value="0">C</option>
+            <option value="-5">D</option>
+            <option value="-10">E</option>
+        </select>
+
+        <label for="reason">評価理由:</label>
+        <textarea id="reason" name="reason" placeholder="評価理由を記入"></textarea>
+
+        <button type="submit">評価を記録</button>
+    </form>
+
+    <div id="summary">
+        <h2>部員ごとのポイント集計</h2>
+    </div>
+
+    <div id="evaluations">
+        <h2>評価履歴</h2>
+    </div>
+
+    <div>
+        <!-- 消去ボタン -->
+        <button class="delete-button" onclick="clearEvaluators()">評価者を消去</button>
+        <button class="delete-button" onclick="clearMembers()">部員を消去</button>
+        <button class="delete-button" onclick="clearSummary()">ポイント集計を消去</button>
+        <button class="delete-button" onclick="clearEvaluations()">評価履歴を消去</button>
+    </div>
+
+    <script>
+        const evaluations = [];
+        const studentPoints = JSON.parse(localStorage.getItem('studentPoints')) || {};
+        let evaluators = JSON.parse(localStorage.getItem('evaluators')) || [];
+        let members = JSON.parse(localStorage.getItem('members')) || [];
+        let currentEvaluator = localStorage.getItem('currentEvaluator') || '';  // 現在の評価者を保持
+
+        function saveToLocalStorage() {
+            localStorage.setItem('evaluators', JSON.stringify(evaluators));
+            localStorage.setItem('members', JSON.stringify(members));
+            localStorage.setItem('studentPoints', JSON.stringify(studentPoints));
+            localStorage.setItem('currentEvaluator', currentEvaluator);  // 現在の評価者を保存
+        }
+
+        function addEvaluator() {
+            const evaluatorName = document.getElementById('add-evaluator').value.trim();
+            if (evaluatorName && !evaluators.includes(evaluatorName)) {
+                evaluators.push(evaluatorName);
+                saveToLocalStorage();
+                updateEvaluatorDropdown();
+            }
+            document.getElementById('add-evaluator').value = '';
+        }
+
+        function addMember() {
+            const memberName = document.getElementById('add-member').value.trim();
+            if (memberName && !members.includes(memberName)) {
+                members.push(memberName);
+                // 部員追加時にポイントを0で初期化
+                if (!studentPoints[memberName]) {
+                    studentPoints[memberName] = 0;
+                }
+                saveToLocalStorage();
+                updateMemberDropdown();
+                displaySummary();
+            }
+            document.getElementById('add-member').value = '';
+        }
+
+        function deleteEvaluator(evaluator) {
+            evaluators = evaluators.filter(e => e !== evaluator);
+            saveToLocalStorage();
+            updateEvaluatorDropdown();
+        }
+
+        function deleteMember(member) {
+            members = members.filter(m => m !== member);
+            delete studentPoints[member];
+            saveToLocalStorage();
+            updateMemberDropdown();
+            displaySummary();
+        }
+
+        function updateEvaluatorDropdown() {
+            const evaluatorDropdown = document.getElementById('evaluator');
+            evaluatorDropdown.innerHTML = `<option value="" disabled selected>評価者を選択</option>`;
+            evaluators.forEach(evaluator => {
+                evaluatorDropdown.innerHTML += `<option value="${evaluator}" ${evaluator === currentEvaluator ? 'selected' : ''}>${evaluator}</option>`;
+            });
+        }
+
+        function updateMemberDropdown() {
+            const memberDropdown = document.getElementById('member');
+            memberDropdown.innerHTML = `<option value="" disabled selected>部員を選択</option>`;
+            members.forEach(member => {
+                memberDropdown.innerHTML += `<option value="${member}">${member}</option>`;
+            });
+        }
+
+        document.getElementById('evaluation-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const evaluator = document.getElementById('evaluator').value;
+            const member = document.getElementById('member').value;
+            const score = parseInt(document.getElementById('score').value);
+            const reason = document.getElementById('reason').value;
+
+            // 評価者が選択されたら、その評価者を保存
+            currentEvaluator = evaluator;
+            saveToLocalStorage();
+
+            studentPoints[member] += score;
+
+            const evaluation = {
+                evaluator,
+                member,
+                score,
+                reason,
+                date: new Date().toLocaleString()
+            };
+
+            evaluations.push(evaluation);
+            saveToLocalStorage();
+            displayEvaluations();
+            displaySummary();
+
+            this.reset();
+        });
+
+        function displayEvaluations() {
+            const evaluationsDiv = document.getElementById('evaluations');
+            evaluationsDiv.innerHTML = `
+                <h2>評価履歴</h2>
+                ${evaluations.map(e => `
+                    <p>
+                        <strong>${e.date}</strong><br>
+                        評価者: ${e.evaluator}<br>
+                        部員: ${e.member}<br>
+                        評価: ${e.score}点<br>
+                        理由: ${e.reason || "なし"}
+                    </p>
+                `).join('')}
+            `;
+        }
+
+        function displaySummary() {
+            const summaryDiv = document.getElementById('summary');
+            summaryDiv.innerHTML = `
+                <h2>部員ごとのポイント集計</h2>
+                <ul>
+                    ${Object.entries(studentPoints)
+                        .map(([member, points]) => `<li>${member}: ${points}点</li>`)
+                        .join('')}
+                </ul>
+            `;
+        }
+
+        members.forEach(member => {
+            if (!studentPoints[member]) studentPoints[member] = 0;
+        });
+
+        updateEvaluatorDropdown();
+        updateMemberDropdown();
+        displayEvaluations();
+        displaySummary();
+
+        function clearEvaluations() {
+            if (confirm("評価履歴を本当に消去しますか？")) {
+                evaluations.length = 0;
+                saveToLocalStorage();
+                displayEvaluations();
+            }
+        }
+
+        function clearMembers() {
+            if (confirm("部員情報を本当に消去しますか？")) {
+                members.length = 0;
+                for (const member in studentPoints) {
+                    delete studentPoints[member];
+                }
+                saveToLocalStorage();
+                updateMemberDropdown();
+                displaySummary();
+            }
+        }
+
+        function clearEvaluators() {
+            if (confirm("評価者情報を本当に消去しますか？")) {
+                evaluators.length = 0;
+                saveToLocalStorage();
+                updateEvaluatorDropdown();
+            }
+        }
+
+        function clearSummary() {
+            if (confirm("ポイント集計を本当に消去しますか？")) {
+                for (const member in studentPoints) {
+                    delete studentPoints[member];
+                }
+                saveToLocalStorage();
+                displaySummary();
+            }
+        }
+    </script>
+</body>
+</html>
